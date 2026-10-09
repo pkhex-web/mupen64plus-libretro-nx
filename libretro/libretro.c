@@ -773,12 +773,11 @@ void update_controllers()
         else if (!strcmp(var.value, "transfer"))
             p1_pak = PLUGIN_TRANSFER_PAK;
 
-        // If controller struct is not initialised yet, set pad_pak_types instead
-        // which will be looked at when initialising the controllers.
+        // Controllers start from pad_pak_types, and a game loaded after another
+        // finds the controller struct still set from the last one.
         if (controller[0].control)
             controller[0].control->Plugin = p1_pak;
-        else
-            pad_pak_types[0] = p1_pak;
+        pad_pak_types[0] = p1_pak;
     }
 
     var.key = CORE_NAME "-pak2";
@@ -795,8 +794,7 @@ void update_controllers()
 
         if (controller[1].control)
             controller[1].control->Plugin = p2_pak;
-        else
-            pad_pak_types[1] = p2_pak;
+        pad_pak_types[1] = p2_pak;
     }
 
     var.key = CORE_NAME "-pak3";
@@ -813,8 +811,7 @@ void update_controllers()
 
         if (controller[2].control)
             controller[2].control->Plugin = p3_pak;
-        else
-            pad_pak_types[2] = p3_pak;
+        pad_pak_types[2] = p3_pak;
     }
 
     var.key = CORE_NAME "-pak4";
@@ -831,8 +828,7 @@ void update_controllers()
 
         if (controller[3].control)
             controller[3].control->Plugin = p4_pak;
-        else
-            pad_pak_types[3] = p4_pak;
+        pad_pak_types[3] = p4_pak;
     }
 
     var.key = CORE_NAME "-astick-deadzone";
