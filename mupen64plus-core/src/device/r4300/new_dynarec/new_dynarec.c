@@ -63,6 +63,10 @@
 #endif // HAVE_LIBNX
 #endif
 
+#ifdef __APPLE__
+#include <libkern/OSCacheControl.h>
+#endif
+
 #if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
 void recomp_dbg_init(void);
 void recomp_dbg_cleanup(void);
@@ -302,6 +306,10 @@ static void inline_readstub(int type,int i,u_int addr_const,char addr,struct reg
 
 void *base_addr;
 void *base_addr_rx;
+#if defined(__APPLE__) && defined(__LIBRETRO__)
+int libretro_exec_mem_alloc(size_t size, void **rx, void **rw);
+void libretro_exec_mem_free(void *rx);
+#endif
 u_char *out;
 unsigned int using_tlb;
 unsigned int stop_after_jal;
@@ -8721,15 +8729,22 @@ void new_dynarec_init(void)
 #define FIXED_CACHE_ADDR 1    // Put the dynarec cache at extra_memory address
 #define DYNAMIC_CACHE_ADDR 2  // Put the dynarec cache at random address
 #define DOUBLE_CACHE_ADDR 3   // Put the dynarec cache at random address with RW address != RX address
+#define FRONTEND_CACHE_ADDR 4 // Let the libretro frontend map the cache, with RW address != RX address
 
 // Default to fixed cache address
 #ifdef HAVE_LIBNX
 #define CACHE_ADDR DOUBLE_CACHE_ADDR
+#elif defined(__APPLE__) && defined(__LIBRETRO__)
+#define CACHE_ADDR FRONTEND_CACHE_ADDR
 #else
 #define CACHE_ADDR FIXED_CACHE_ADDR
 #endif
 
-#if CACHE_ADDR==DOUBLE_CACHE_ADDR
+#if CACHE_ADDR==FRONTEND_CACHE_ADDR
+  // Apple platforms refuse memory that is writable and executable at once.
+  if (!libretro_exec_mem_alloc(1<<TARGET_SIZE_2, &base_addr_rx, &base_addr))
+    base_addr = (void*)-1;
+#elif CACHE_ADDR==DOUBLE_CACHE_ADDR
 #ifdef HAVE_LIBNX
   base_addr = mmap((u_char *)jit_memory, 1<<TARGET_SIZE_2, 0,0,0,0);
   base_addr_rx = (void*)jit_memory;
@@ -8842,6 +8857,8 @@ void new_dynarec_cleanup(void)
 #if !defined(RECOMP_DBG)
   #if defined(WIN32)
     VirtualFree(base_addr, 0, MEM_RELEASE);
+  #elif NEW_DYNAREC == NEW_DYNAREC_ARM64 && CACHE_ADDR==FRONTEND_CACHE_ADDR
+    libretro_exec_mem_free(base_addr_rx);
   #elif NEW_DYNAREC == NEW_DYNAREC_ARM64 && CACHE_ADDR!=FIXED_CACHE_ADDR
     if (munmap (base_addr_rx, 1<<TARGET_SIZE_2) < 0) {DebugMessage(M64MSG_ERROR, "munmap() failed");}
   #else

@@ -4,7 +4,14 @@
 #define HOST_REGS 29
 #define HOST_CCREG 20 /* callee-save */
 #define HOST_BTREG 19 /* callee-save */
+#ifdef __APPLE__
+/* Apple reserves x18 and may clear it at any time, so the allocator skips it and trampolines use x16. */
+#define EXCLUDE_REG 18
+#define TRAMPOLINE_REG 16
+#else
 #define EXCLUDE_REG 29 /* FP */
+#define TRAMPOLINE_REG 18
+#endif
 
 //#define DISABLE_BLOCK_LINKING 1
 #define NATIVE_64 1

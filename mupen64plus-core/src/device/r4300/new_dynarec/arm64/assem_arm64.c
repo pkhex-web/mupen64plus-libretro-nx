@@ -263,7 +263,9 @@ static uintptr_t jump_table_symbols[] = {
 
 static void cache_flush(char* start, char* end)
 {
-#ifndef WIN32
+#if defined(__APPLE__)
+    sys_icache_invalidate(start, end - start);
+#elif !defined(WIN32)
     // Don't rely on GCC's __clear_cache implementation, as it caches
     // icache/dcache cache line sizes, that can vary between cores on
     // big.LITTLE architectures.
@@ -4562,8 +4564,8 @@ static void do_miniht_jump(int rs,int rh,int ht) {
   emit_cmp(rh,rs);
   intptr_t jaddr=(intptr_t)out;
   emit_jeq(0);
-  if(rs==18) {
-    // x18 is used for trampoline jumps, move it to another register (x0)
+  if(rs==TRAMPOLINE_REG) {
+    // The trampoline register is used for trampoline jumps, move it to another register (x0)
     emit_mov(rs,0);
     rs=0;
   }
@@ -4656,8 +4658,8 @@ static void arch_init(void) {
     if(offset>=-134217728LL&&offset<134217728LL) {
       *ptr4=0x14000000|((offset>>2)&0x3ffffff); // direct branch
     }else{
-      *ptr4=0x58000000|((8>>2)<<5)|18; // ldr x18,[pc,#8]
-      *(ptr4+1)=0xd61f0000|(18<<5);
+      *ptr4=0x58000000|((8>>2)<<5)|TRAMPOLINE_REG; // ldr x18,[pc,#8]
+      *(ptr4+1)=0xd61f0000|(TRAMPOLINE_REG<<5);
     }
     ptr2++;
     *ptr2=*ptr;
@@ -4666,5 +4668,5 @@ static void arch_init(void) {
     ptr3+=2;
   }
 
-  __clear_cache((char *)base_addr+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE,(char *)base_addr+(1<<TARGET_SIZE_2));
+  cache_flush((char *)base_addr_rx+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE,(char *)base_addr_rx+(1<<TARGET_SIZE_2));
 }

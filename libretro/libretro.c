@@ -108,6 +108,51 @@ retro_input_poll_t poll_cb = NULL;
 retro_input_state_t input_cb = NULL;
 retro_audio_sample_batch_t audio_batch_cb = NULL;
 retro_environment_t environ_cb = NULL;
+
+#if defined(__APPLE__) && defined(NEW_DYNAREC)
+#ifndef RETRO_ENVIRONMENT_EXEC_MEM_ALLOC
+#define RETRO_ENVIRONMENT_EXEC_MEM_ALLOC 83
+#define RETRO_ENVIRONMENT_EXEC_MEM_FREE 84
+#define RETRO_EXEC_MEM_MODE_RWX 2
+#define RETRO_EXEC_MEM_MODE_DUAL_MAP 4
+struct retro_exec_mem_alloc
+{
+   unsigned version;
+   size_t size;
+   unsigned mode;
+   void *rx;
+   void *rw;
+};
+struct retro_exec_mem_free
+{
+   void *rx;
+};
+#endif
+
+/* The dynarec writes and runs its code at once, so it can't toggle protections. */
+static bool libretro_exec_mem_dual_mapped(void)
+{
+   struct retro_exec_mem_alloc probe = { 1, 0, 0, NULL, NULL };
+   return environ_cb(RETRO_ENVIRONMENT_EXEC_MEM_ALLOC, &probe)
+      && (probe.mode == RETRO_EXEC_MEM_MODE_DUAL_MAP || probe.mode == RETRO_EXEC_MEM_MODE_RWX);
+}
+
+int libretro_exec_mem_alloc(size_t size, void **rx, void **rw)
+{
+   struct retro_exec_mem_alloc alloc = { 1, size, 0, NULL, NULL };
+   if (!environ_cb(RETRO_ENVIRONMENT_EXEC_MEM_ALLOC, &alloc) || !alloc.rx || !alloc.rw)
+      return 0;
+   *rx = alloc.rx;
+   *rw = alloc.rw;
+   return 1;
+}
+
+void libretro_exec_mem_free(void *rx)
+{
+   struct retro_exec_mem_free mem = { rx };
+   environ_cb(RETRO_ENVIRONMENT_EXEC_MEM_FREE, &mem);
+}
+#endif
 retro_environment_t environ_clear_thread_waits_cb = NULL;
 
 struct retro_rumble_interface rumble;
@@ -1397,6 +1442,15 @@ static void update_variables(bool startup)
           else if (!strcmp(var.value, "dynamic_recompiler"))
              r4300_emumode = EMUMODE_DYNAREC;
        }
+
+#if defined(__APPLE__) && defined(NEW_DYNAREC)
+       if (r4300_emumode == EMUMODE_DYNAREC && !libretro_exec_mem_dual_mapped())
+       {
+          if (log_cb)
+             log_cb(RETRO_LOG_WARN, "The frontend has no dual-mapped executable memory; using the cached interpreter\n");
+          r4300_emumode = EMUMODE_INTERPRETER;
+       }
+#endif
 
        var.key = CORE_NAME "-aspect";
        var.value = NULL;
